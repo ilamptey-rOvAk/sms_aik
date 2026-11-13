@@ -1,0 +1,37 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+venv/
+.venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Database files and backups
+*.sqlite3
+*.db
+
+# Django generated files
+staticfiles/
+media/
+
+# Node.js dependencies
+node_modules/
+
+# Editor and operating system files
+.vscode/
+.DS_Store
+
+# Git and temporary files
+.git/
+*.log
+.pytest_cache/
+.coverage
+
+# Project-specific backup and export files
+data.json
