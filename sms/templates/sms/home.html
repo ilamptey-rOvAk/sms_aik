@@ -1,0 +1,205 @@
+
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIK SMS Platform</title>
+    <link rel="stylesheet" href="{% static 'sms/style.css' %}">
+</head>
+
+<body>
+
+    <div class="dashboard">
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">A</div>
+                <div>
+                    <h2>AIK SMS</h2>
+                    <span>Messaging Platform</span>
+                </div>
+            </div>
+
+            <div class="sidebar-menu">
+                <p class="menu-heading">MAIN MENU</p>
+
+                <a href="/" class="menu-item active">
+                    <span>✉</span>
+                    Send Message
+                </a>
+
+                <a href="/history/" class="menu-item">
+                    <span>▤</span>
+                    Message History
+                </a>
+
+                <a href="#" class="menu-item">
+                    <span>◷</span>
+                    Delivery Reports
+                </a>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="status-dot"></div>
+                <span>SMS Platform</span>
+            </div>
+        </aside>
+
+
+        <!-- Main Content -->
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Send SMS</h1>
+                    <p>Compose and send messages to your contacts.</p>
+                </div>
+
+                <div class="user-profile">
+                    <div class="user-avatar">A</div>
+                    <span>Administrator</span>
+                </div>
+            </header>
+
+
+            <section class="welcome-section">
+                <div>
+                    <span class="welcome-label">MESSAGING CENTER</span>
+                    <h2>Welcome to AIK SMS Platform</h2>
+                    <p>Send messages quickly and manage your SMS communication.</p>
+                </div>
+
+                <div class="welcome-icon">✉</div>
+            </section>
+
+
+            <section class="content-section">
+
+                <div class="section-heading">
+                    <div>
+                        <h2>Compose Message</h2>
+                        <p>Enter your recipient details and message below.</p>
+                    </div>
+
+                    <span class="live-label">
+                        <span class="status-dot"></span>
+                        SMS Gateway
+                    </span>
+                </div>
+
+
+                <div class="form-box">
+
+                    <div class="form-title">
+                        <div class="form-icon">✉</div>
+                        <div>
+                            <h3>New Message</h3>
+                            <p>Fill in the information to send your SMS.</p>
+                        </div>
+                    </div>
+
+
+                    {% if feedback %}
+                        <div class="feedback">
+                            {{ feedback }}
+                        </div>
+                    {% endif %}
+
+
+                    <form method="POST">
+                        {% csrf_token %}
+
+                        <div class="form-group">
+                            <label for="phone_number">Recipient Phone Number</label>
+
+                            <input
+                                type="text"
+                                id="phone_number"
+                                name="phone_number"
+                                placeholder="233XXXXXXXXX"
+                                required
+                            >
+
+                            <small>Use international format. Separate multiple numbers with commas.</small>
+                        </div>
+
+
+                        <div class="form-group">
+                            <label for="sender_id">Sender ID</label>
+
+                            <select name="sender_id" id="sender_id" required>
+                                <option value="">Select Sender ID</option>
+
+                                {% for sender_id in sender_ids %}
+                                    <option value="{{ sender_id }}">{{ sender_id }}</option>
+                                {% endfor %}
+                            </select>
+
+                            <small>Choose one of your registered Sender IDs.</small>
+                        </div>
+
+
+                        <div class="form-group">
+                            <div class="label-row">
+                                <label for="message">Your Message</label>
+                                <span class="required-label">Required</span>
+                            </div>
+
+                            <textarea
+                                name="message"
+                                id="message"
+                                rows="6"
+                                placeholder="Type your message here..."
+                                required
+                            ></textarea>
+
+                            <div class="message-footer">
+                                <span>Keep your message clear and concise.</span>
+                                <span id="counter">0 characters</span>
+                            </div>
+                        </div>
+
+
+                        <div class="form-actions">
+                            <button type="reset" class="clear-button">
+                                Clear Form
+                            </button>
+
+                            <button type="submit" class="send-button">
+                                <span>✉</span>
+                                Send Message
+                            </button>
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </section>
+
+
+            <footer class="footer">
+                <p>AIK SMS Platform &copy; 2026. All rights reserved.</p>
+                <p>Powered by Nalo SMS API</p>
+            </footer>
+
+        </main>
+
+    </div>
+
+
+    <script>
+        const messageBox = document.getElementById("message");
+        const counter = document.getElementById("counter");
+
+        messageBox.addEventListener("input", function() {
+            counter.textContent = messageBox.value.length + " characters";
+        });
+    </script>
+
+</body>
+</html>

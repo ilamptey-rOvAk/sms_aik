@@ -1,0 +1,152 @@
+
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Message History | AIK SMS</title>
+    <link rel="stylesheet" href="{% static 'sms/style.css' %}">
+</head>
+
+<body>
+
+<div class="dashboard">
+
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-icon">A</div>
+            <div>
+                <h2>AIK SMS</h2>
+                <span>Messaging Platform</span>
+            </div>
+        </div>
+
+        <div class="sidebar-menu">
+            <p class="menu-heading">MAIN MENU</p>
+
+            <a href="/" class="menu-item">
+                <span>✉</span>
+                Send Message
+            </a>
+
+            <a href="{% url 'message_history' %}" class="menu-item active">
+                <span>▤</span>
+                Message History
+            </a>
+
+            <a href="#" class="menu-item">
+                <span>◷</span>
+                Delivery Reports
+            </a>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="status-dot"></div>
+            <span>SMS Platform</span>
+        </div>
+    </aside>
+
+
+    <main class="main-content">
+
+        <header class="topbar">
+            <div>
+                <h1>Message History</h1>
+                <p>View all messages submitted through your platform.</p>
+            </div>
+
+            <div class="user-profile">
+                <div class="user-avatar">A</div>
+                <span>Administrator</span>
+            </div>
+        </header>
+
+
+        <section class="content-section">
+
+            <div class="section-heading">
+                <div>
+                    <h2>Sent Messages</h2>
+                    <p>Your previously submitted SMS messages.</p>
+                </div>
+
+                <a href="/" class="send-button">
+                    Send New Message
+                </a>
+            </div>
+
+
+            <div class="form-box">
+
+                <div class="form-title">
+                    <div class="form-icon">▤</div>
+                    <div>
+                        <h3>Message Records</h3>
+                        <p>Total messages: {{ messages|length }}</p>
+                    </div>
+                </div>
+
+
+                <div class="table-container">
+
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Date Sent</th>
+                                <th>Recipient</th>
+                                <th>Sender ID</th>
+                                <th>Message</th>
+                                <th>API Status</th>
+                                <th>Delivery Status</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            {% for item in messages %}
+                            <tr>
+                                <td>{{ item.created_at|date:"d M Y, H:i" }}</td>
+                                <td>{{ item.phone_numbers }}</td>
+                                <td>{{ item.sender_id }}</td>
+                                <td>{{ item.message }}</td>
+                                <td>{{ item.api_status }}</td>
+                                <td>{{ item.delivery_status }}</td>
+                            </tr>
+
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="empty-message">
+                                    No messages have been sent yet.
+                                </td>
+                            </tr>
+                            {% endfor %}
+
+                        </tbody>
+                    </table>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <footer class="footer">
+            <p>AIK SMS Platform &copy; 2026. All rights reserved.</p>
+            <p>Powered by Nalo SMS API</p>
+        </footer>
+
+    </main>
+
+</div>
+<script>
+    // Refresh the message history every 5 seconds
+    setInterval(function() {
+        window.location.reload();
+    }, 5000);
+</script>
+
+</body>
+</html>
