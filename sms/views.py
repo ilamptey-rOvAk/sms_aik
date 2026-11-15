@@ -7,7 +7,7 @@ import requests
 from .models import SentMessages, DeliveryReport
 import json
 from django.utils import timezone
-
+from datetime import datetime, timezone as dt_timezone, timedelta
 def home(request):
 
     feedback = ""
@@ -89,50 +89,90 @@ def nalo_callback(request):
         return HttpResponse("Method not allowed", status=405)
 
     if request.method == "POST":
-        data = request.POST.dict()
-
-        if not data:
-            try:
-                data = json.loads(request.body.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                data = {}
+        try:
+            data = json.loads(request.body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            data = request.POST.dict()
     else:
         data = request.GET.dict()
 
-    job_id = data.get("job_id")
-    msisdn = data.get("msisdn")
-    status = data.get("status")
+    if not isinstance(data, dict):
+        return HttpResponse("Invalid callback data", status=400)
 
-    if not job_id or not msisdn or not status:
+    mid = data.get("mid", "")
+    msisdn = str(data.get("msisdn", "")).strip()
+    status = str(data.get("status", "")).strip()
+
+    if not mid or not msisdn or not status:
         return HttpResponse("Missing callback information", status=400)
 
-    message_record = SentMessages.objects.filter(
-        job_id=job_id
-    ).first()
+    try:
+        mid_parts = mid.split(".")
+        callback_timestamp = int(mid_parts[3])
 
-    if not message_record:
+        callback_time = datetime.fromtimestamp(
+            callback_timestamp,
+            tz=dt_timezone.utc
+        )
+    except (ValueError, IndexError, TypeError):
+        return HttpResponse("Invalid message ID", status=400)
+
+    start_time = callback_time - timedelta(seconds=2)
+    end_time = callback_time + timedelta(seconds=60)
+
+    matching_messages = []
+
+    messages = SentMessages.objects.filter(
+        created_at__gte=start_time,
+        created_at__lte=end_time
+    )
+
+    for message in messages:
+        recipients = [
+            number.strip()
+            for number in message.phone_numbers.split(",")
+        ]
+
+        if msisdn in recipients:
+            matching_messages.append(message)
+
+    if len(matching_messages) == 0:
         return HttpResponse("Message not found", status=404)
 
-    phone_numbers = [
+    if len(matching_messages) > 1:
+        return HttpResponse("Multiple matching messages", status=409)
+
+    message_record = matching_messages[0]
+
+    DeliveryReport.objects.update_or_create(
+        sent_message=message_record,
+        msisdn=msisdn,
+        defaults={
+            "status": status
+        }
+    )
+
+    recipients = [
         number.strip()
         for number in message_record.phone_numbers.split(",")
     ]
 
-    if msisdn.strip() not in phone_numbers:
-        return HttpResponse("Recipient not found", status=404)
+    reports = {
+        report.msisdn: report.status
+        for report in DeliveryReport.objects.filter(
+            sent_message=message_record
+        )
+    }
 
-    DeliveryReport.objects.update_or_create(
-        sent_message=message_record,
-        msisdn=msisdn.strip(),
-        defaults={
-            "status": str(status)
-        }
-    )
+    if all(number in reports for number in recipients):
+        if all(reports[number] == "DELIVRD" for number in recipients):
+            message_record.delivery_status = "DELIVRD"
+        else:
+            message_record.delivery_status = "Delivery issues"
+    else:
+        message_record.delivery_status = "Pending"
 
     message_record.delivery_time = timezone.now()
-
-    if len(phone_numbers) == 1:
-        message_record.delivery_status = str(status)
 
     message_record.save(update_fields=[
         "delivery_status",
