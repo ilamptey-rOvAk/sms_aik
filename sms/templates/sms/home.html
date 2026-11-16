@@ -199,7 +199,55 @@
         messageBox.addEventListener("input", function() {
             counter.textContent = messageBox.value.length + " characters";
         });
-    </script>
 
+// WebSocket keep-alive connection
+let keepAliveSocket;
+let reconnectDelay = 1000;
+let heartbeatInterval;
+
+function connectKeepAlive() {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws/keepalive/`;
+
+    keepAliveSocket = new WebSocket(wsUrl);
+
+    keepAliveSocket.onopen = function() {
+        console.log("Keep-alive WebSocket connected.");
+
+        reconnectDelay = 1000;
+
+        // Send a message immediately
+        keepAliveSocket.send("keepalive");
+
+        // Send another message every 5 minutes
+        heartbeatInterval = setInterval(function() {
+            if (keepAliveSocket.readyState === WebSocket.OPEN) {
+                keepAliveSocket.send("keepalive");
+            }
+        }, 5 * 60 * 1000);
+    };
+
+    keepAliveSocket.onmessage = function(event) {
+        console.log("Server response:", event.data);
+    };
+
+    keepAliveSocket.onclose = function() {
+        clearInterval(heartbeatInterval);
+
+        console.log("WebSocket disconnected. Reconnecting...");
+
+        setTimeout(connectKeepAlive, reconnectDelay);
+
+        reconnectDelay = Math.min(reconnectDelay * 2, 60000);
+    };
+
+    keepAliveSocket.onerror = function(error) {
+        console.error("WebSocket error:", error);
+        keepAliveSocket.close();
+    };
+}
+
+connectKeepAlive();
+    </script>
 </body>
 </html>
