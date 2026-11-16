@@ -5,3 +5,5 @@ psycopg[binary]
 gunicorn
 whitenoise
 dj-database-url
+channels==4.3.2
+daphne==4.2.3
