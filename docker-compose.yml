@@ -1,3 +1,4 @@
+
 services:
   db:
     image: postgres:17
@@ -13,16 +14,16 @@ services:
   app:
     build: .
     container_name: sms_aik_app
+    restart: unless-stopped
     ports:
       - "8000:8000"
     env_file:
       - .env
-    environment:
-      DB_PATH: /data/db.sqlite3
     volumes:
       - .:/app
       - sms_data:/data
-    command: python manage.py runserver 0.0.0.0:8000
+    command: >
+      daphne -b 0.0.0.0 -p 8000 core.asgi:application
     depends_on:
       - db
 
@@ -36,3 +37,4 @@ services:
 volumes:
   sms_data:
   postgres_data:
+
