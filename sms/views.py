@@ -2,6 +2,7 @@
 import json
 import logging
 import requests
+from urllib.parse import parse_qs
 
 from datetime import datetime, timezone as dt_timezone, timedelta
 
@@ -108,6 +109,7 @@ def message_history(request):
     })
 
 
+
 @csrf_exempt
 def nalo_callback(request):
 
@@ -126,6 +128,23 @@ def nalo_callback(request):
             try:
                 data = json.loads(request.body.decode("utf-8"))
 
+                # Handle JSON containing another JSON string
+                if isinstance(data, str):
+
+                    try:
+                        data = json.loads(data)
+
+                    except json.JSONDecodeError:
+
+                        # Check whether the string is URL-encoded
+                        parsed_data = parse_qs(data)
+
+                        if parsed_data:
+                            data = {
+                                key: values[0]
+                                for key, values in parsed_data.items()
+                            }
+
             except (json.JSONDecodeError, UnicodeDecodeError):
 
                 logger.warning("Nalo callback contained invalid JSON")
@@ -138,25 +157,20 @@ def nalo_callback(request):
     else:
         data = request.GET.dict()
 
-    # Handle different JSON structures
+    # Handle JSON lists
     if isinstance(data, list):
-
-        logger.info(
-            "Nalo callback received a JSON list containing %s item(s)",
-            len(data)
-        )
 
         if len(data) == 1 and isinstance(data[0], dict):
             data = data[0]
 
         else:
             logger.warning(
-                "Nalo callback JSON list could not be processed automatically"
+                "Nalo callback JSON list could not be processed"
             )
 
             return HttpResponse("Unsupported callback format", status=400)
 
-    elif not isinstance(data, dict):
+    if not isinstance(data, dict):
 
         logger.warning(
             "Nalo callback invalid data type: %s",
@@ -182,11 +196,10 @@ def nalo_callback(request):
     msisdn = str(data.get("msisdn", "")).strip()
     status = str(data.get("status", "")).strip()
 
-    # Check required fields
     if not mid or not msisdn or not status:
 
         logger.warning(
-            "Nalo callback missing fields: mid=%s, msisdn=%s, status=%s",
+            "Nalo callback missing required fields: mid=%s, msisdn=%s, status=%s",
             bool(mid),
             bool(msisdn),
             bool(status)
