@@ -14,3 +14,6 @@ class KeepAliveConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             "message": "Connection is active"
         }))
+
+    async def disconnect(self, close_code):
+        pass
