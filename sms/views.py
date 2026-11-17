@@ -125,6 +125,11 @@ def nalo_callback(request):
 
         if "application/json" in content_type:
 
+            logger.warning(
+               "ACTUAL NALO CALLBACK BODY: %r",
+               request.body[:2000]
+)
+
             try:
                 data = json.loads(request.body.decode("utf-8"))
 
