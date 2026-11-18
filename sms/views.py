@@ -125,10 +125,7 @@ def nalo_callback(request):
 
         if "application/json" in content_type:
 
-            logger.warning(
-               "ACTUAL NALO CALLBACK BODY: %r",
-               request.body[:2000]
-)
+            logger.debug("Nalo callback body: %r", request.body[:2000])
 
             try:
                 data = json.loads(request.body.decode("utf-8"))
@@ -212,61 +209,79 @@ def nalo_callback(request):
 
         return HttpResponse("Missing callback information", status=400)
 
-    # Extract timestamp from message ID
-    try:
+    # --- Strategy 1: match directly by job_id (most reliable) ---
+    message_record = SentMessages.objects.filter(job_id=mid).first()
 
-        mid_parts = mid.split(".")
+    if message_record:
+        logger.info("Matched SMS record %s by job_id", message_record.id)
 
-        if len(mid_parts) < 4:
-            raise ValueError("Invalid message ID structure")
+    else:
+        # --- Strategy 2: match by timestamp window + normalised phone number ---
 
-        callback_timestamp = int(mid_parts[3])
+        def normalize_msisdn(number):
+            """Normalise Ghana numbers: 0XXXXXXXXX and 233XXXXXXXXX both become 0XXXXXXXXX."""
+            digits = "".join(c for c in str(number) if c.isdigit())
+            if digits.startswith("233") and len(digits) == 12:
+                return "0" + digits[3:]
+            return digits
 
-        callback_time = datetime.fromtimestamp(
-            callback_timestamp,
-            tz=dt_timezone.utc
+        # Try to extract a Unix timestamp from the mid (position 3 when split by ".")
+        callback_time = None
+        try:
+            mid_parts = mid.split(".")
+            if len(mid_parts) >= 4:
+                callback_timestamp = int(mid_parts[3])
+                callback_time = datetime.fromtimestamp(
+                    callback_timestamp,
+                    tz=dt_timezone.utc
+                )
+        except (ValueError, IndexError, TypeError, OverflowError):
+            pass
+
+        normalised_msisdn = normalize_msisdn(msisdn)
+
+        if callback_time:
+            # Wider window: NALO's timestamp in mid may differ from created_at
+            # by up to ~30 s, so look 5 min back and 2 min forward to be safe.
+            start_time = callback_time - timedelta(minutes=5)
+            end_time   = callback_time + timedelta(minutes=2)
+            candidates = SentMessages.objects.filter(
+                created_at__gte=start_time,
+                created_at__lte=end_time
+            )
+        else:
+            # No parseable timestamp — search the last 10 minutes of records
+            candidates = SentMessages.objects.order_by("-created_at")[:50]
+
+        matching_messages = []
+        for candidate in candidates:
+            stored_numbers = [
+                normalize_msisdn(n)
+                for n in candidate.phone_numbers.split(",")
+                if n.strip()
+            ]
+            if normalised_msisdn in stored_numbers:
+                matching_messages.append(candidate)
+
+        if len(matching_messages) == 0:
+            logger.warning(
+                "No matching SMS record for mid=%s msisdn=%s (normalised=%s)",
+                mid, msisdn, normalised_msisdn
+            )
+            return HttpResponse("Message not found", status=404)
+
+        if len(matching_messages) > 1:
+            # Pick the most recent one to avoid ambiguity
+            matching_messages.sort(key=lambda m: m.created_at, reverse=True)
+            logger.warning(
+                "Multiple SMS records matched callback – using most recent (id=%s)",
+                matching_messages[0].id
+            )
+
+        message_record = matching_messages[0]
+        logger.info(
+            "Matched SMS record %s by normalised msisdn lookup", message_record.id
         )
-
-    except (ValueError, IndexError, TypeError, OverflowError):
-
-        logger.warning("Invalid Nalo message ID format")
-
-        return HttpResponse("Invalid message ID", status=400)
-
-    # Search for the original SMS submission
-    start_time = callback_time - timedelta(seconds=2)
-    end_time = callback_time + timedelta(seconds=60)
-
-    messages = SentMessages.objects.filter(
-        created_at__gte=start_time,
-        created_at__lte=end_time
-    )
-
-    matching_messages = []
-
-    for message_record in messages:
-
-        recipients = [
-            number.strip()
-            for number in message_record.phone_numbers.split(",")
-        ]
-
-        if msisdn in recipients:
-            matching_messages.append(message_record)
-
-    if len(matching_messages) == 0:
-
-        logger.warning("No matching SMS record found for delivery callback")
-
-        return HttpResponse("Message not found", status=404)
-
-    if len(matching_messages) > 1:
-
-        logger.warning("Multiple SMS records matched delivery callback")
-
-        return HttpResponse("Multiple matching messages", status=409)
-
-    message_record = matching_messages[0]
 
     # Save delivery report
     DeliveryReport.objects.update_or_create(
@@ -278,26 +293,27 @@ def nalo_callback(request):
     )
 
     # Check delivery status for all recipients
-    recipients = [
-        number.strip()
-        for number in message_record.phone_numbers.split(",")
-    ]
+    def normalize_msisdn(number):
+        digits = "".join(c for c in str(number) if c.isdigit())
+        if digits.startswith("233") and len(digits) == 12:
+            return "0" + digits[3:]
+        return digits
 
-    reports = {
-        report.msisdn: report.status
-        for report in DeliveryReport.objects.filter(
-            sent_message=message_record
-        )
+    expected_numbers = {
+        normalize_msisdn(n)
+        for n in message_record.phone_numbers.split(",")
+        if n.strip()
     }
 
-    if all(number in reports for number in recipients):
+    reports = {
+        normalize_msisdn(report.msisdn): report.status
+        for report in DeliveryReport.objects.filter(sent_message=message_record)
+    }
 
-        if all(
-            reports[number] == "DELIVRD"
-            for number in recipients
-        ):
+    if expected_numbers.issubset(set(reports.keys())):
+
+        if all(reports[num] == "DELIVRD" for num in expected_numbers):
             message_record.delivery_status = "DELIVRD"
-
         else:
             message_record.delivery_status = "Delivery issues"
 
@@ -312,8 +328,9 @@ def nalo_callback(request):
     ])
 
     logger.info(
-        "Delivery report successfully saved for SMS record %s",
-        message_record.id
+        "Delivery report saved for SMS record %s — status: %s",
+        message_record.id,
+        message_record.delivery_status
     )
 
     return HttpResponse("Delivery report received", status=200)
